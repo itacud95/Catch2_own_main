@@ -1,5 +1,3 @@
-#include <dlfcn.h>
-
 #include <catch2/catch_all.hpp>
 #include <iostream>
 #include <string>
@@ -27,40 +25,48 @@ class CatchTestRunner {
     void operator=(CatchTestRunner const&) = delete;
 
     bool RunTests() {
+        std::cout << "Running tests\n";
+        
         failedTests.clear();
         output = "";
-        static int counter = 0;
-        SetConfig();
+        
         int result = session.run();
 
-        std::set<std::string> tags = GetTags();
-        PrintTags(tags);
+        PrintTags(GetTags());
 
         return result == 0;
     }
 
+    std::set<std::string> GetTags() { return _tags; }
+
    private:
     CatchTestRunner() : session(Catch::Session()) {
+        SetConfigFetchTags();
+        FetchTestTags();
+
         SetConfig();
-        _tags = GetTags();
-        PrintTags(_tags);
     }
 
-    std::set<std::string> GetTags() {
-        std::set<std::string> tags;
+    void SetConfigFetchTags() {
+        Catch::ConfigData conf;
+        conf.filenamesAsTags = true;
+        conf.listTests = true;
+
+        session.useConfigData(conf);
+        session.run();
+    }
+
+    void FetchTestTags() {
         auto const& testSpec = session.config().testSpec();
-        // if (testSpec.hasFilters()) {
         for (auto const& test : Catch::getAllTestCasesSorted(session.config())) {
             for (auto const& tag : test.getTestCaseInfo().tags) {
                 std::string taggg(tag.original.begin(), tag.original.size());
-                tags.insert(taggg);
+                _tags.insert(taggg);
             }
         }
-        // }
-        return tags;
     }
 
-    void PrintTags(std::set<std::string> tags){
+    void PrintTags(std::set<std::string> tags) {
         std::cout << "***************\n";
         for (auto tag : tags) {
             std::cout << "***: " << tag << '\n';
@@ -69,15 +75,13 @@ class CatchTestRunner {
     }
 
     void SetConfig() {
-        auto& config = session.configData();
-        config.filenamesAsTags = true;
-        config.defaultOutputFilename = "%debug";
-        config.defaultOutputFilename = "output";// %debug
-        // config.defaultColourMode = Catch::ColourMode::ANSI;
+        Catch::ConfigData conf;
+        conf.defaultOutputFilename = "%debug";
+        // config.defaultOutputFilename = "output";
+        conf.defaultColourMode = Catch::ColourMode::ANSI;
         // config.testsOrTags.push_back("[myTag]");
         // config.testsOrTags = {"[myTag]"};
-        // config.listTags = true;
-        // session.useConfigData(config);
+        session.useConfigData(conf);
     }
     Catch::Session session;
     std::set<std::string> _tags;
@@ -86,7 +90,9 @@ class CatchTestRunner {
 CATCH_REGISTER_LISTENER(EventListener)
 
 int main() {
-    constexpr auto numruns = 1;
+    auto tags = CatchTestRunner::GetInstance().GetTags();
+
+    constexpr auto numruns = 4;
     for (int i = 0; i < numruns; i++) {
         auto res = CatchTestRunner::GetInstance().RunTests();
         std::cout << fullOutput << '\n';
